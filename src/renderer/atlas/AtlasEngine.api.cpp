@@ -316,7 +316,7 @@ HRESULT AtlasEngine::Enable() noexcept
 
 [[nodiscard]] float AtlasEngine::GetScaling() const noexcept
 {
-    return static_cast<float>(_api.s->font->dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
+    return static_cast<f32>(_api.s->font->dpi) / static_cast<f32>(USER_DEFAULT_SCREEN_DPI);
 }
 
 [[nodiscard]] Microsoft::Console::Types::Viewport AtlasEngine::GetViewportInCharacters(const Types::Viewport& viewInPixels) const noexcept
@@ -620,15 +620,15 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
     const auto fontSizeInDIP = fontSize / 72.0f * 96.0f;
     const auto fontSizeInPx = fontSize / 72.0f * dpi;
 
-    const auto designUnitsPerPx = fontSizeInPx / static_cast<float>(metrics.designUnitsPerEm);
-    const auto ascent = static_cast<float>(metrics.ascent) * designUnitsPerPx;
-    const auto descent = static_cast<float>(metrics.descent) * designUnitsPerPx;
-    const auto lineGap = static_cast<float>(metrics.lineGap) * designUnitsPerPx;
-    const auto underlinePosition = static_cast<float>(-metrics.underlinePosition) * designUnitsPerPx;
-    const auto underlineThickness = static_cast<float>(metrics.underlineThickness) * designUnitsPerPx;
-    const auto strikethroughPosition = static_cast<float>(-metrics.strikethroughPosition) * designUnitsPerPx;
-    const auto strikethroughThickness = static_cast<float>(metrics.strikethroughThickness) * designUnitsPerPx;
-    const auto advanceWidth = static_cast<float>(glyphMetrics.advanceWidth) * designUnitsPerPx;
+    const auto designUnitsPerPx = fontSizeInPx / static_cast<f32>(metrics.designUnitsPerEm);
+    const auto ascent = static_cast<f32>(metrics.ascent) * designUnitsPerPx;
+    const auto descent = static_cast<f32>(metrics.descent) * designUnitsPerPx;
+    const auto lineGap = static_cast<f32>(metrics.lineGap) * designUnitsPerPx;
+    const auto underlinePosition = static_cast<f32>(-metrics.underlinePosition) * designUnitsPerPx;
+    const auto underlineThickness = static_cast<f32>(metrics.underlineThickness) * designUnitsPerPx;
+    const auto strikethroughPosition = static_cast<f32>(-metrics.strikethroughPosition) * designUnitsPerPx;
+    const auto strikethroughThickness = static_cast<f32>(metrics.strikethroughThickness) * designUnitsPerPx;
+    const auto advanceWidth = static_cast<f32>(glyphMetrics.advanceWidth) * designUnitsPerPx;
     const auto advanceHeight = ascent + descent + lineGap;
 
     auto adjustedWidth = std::roundf(fontInfoDesired.GetCellWidth().Resolve(advanceWidth, dpi, fontSizeInPx, advanceWidth));
@@ -705,7 +705,7 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
         fontMetrics->fontCollection = std::move(fontCollection);
         fontMetrics->fontFamily = std::move(fontFamily);
         fontMetrics->fontName = std::move(fontName);
-        fontMetrics->baselineInDIP = baseline / static_cast<float>(dpi) * 96.0f;
+        fontMetrics->baselineInDIP = baseline / static_cast<f32>(dpi) * 96.0f;
         fontMetrics->fontSizeInDIP = fontSizeInDIP;
         fontMetrics->advanceScale = cellWidth / adjustedWidth;
         fontMetrics->cellSize = { cellWidth, cellHeight };

@@ -106,10 +106,13 @@ namespace Microsoft::Console::Render::Atlas
             // IDXGISwapChain2::GetFrameLatencyWaitableObject returns an auto-reset event.
             // Once we've waited on the event, waiting on it again will block until the timeout elapses.
             // _waitForPresentation guards against this.
-            if (_waitForPresentation)
+            if constexpr (!debugContinuousRedraw)
             {
-                WaitForSingleObjectEx(_frameLatencyWaitableObject.get(), 100, true);
-                _waitForPresentation = false;
+                if (_waitForPresentation)
+                {
+                    WaitForSingleObjectEx(_frameLatencyWaitableObject.get(), 100, true);
+                    _waitForPresentation = false;
+                }
             }
         }
 
@@ -140,7 +143,7 @@ namespace Microsoft::Console::Render::Atlas
             // If our background is opaque we can enable "independent" flips by setting DXGI_ALPHA_MODE_IGNORE.
             // As our swap chain won't have to compose with DWM anymore it reduces the display latency dramatically.
             desc.AlphaMode = p.s->target->enableTransparentBackground ? DXGI_ALPHA_MODE_PREMULTIPLIED : DXGI_ALPHA_MODE_IGNORE;
-            desc.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+            desc.Flags = 0; // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
             wil::com_ptr<IDXGISwapChain1> swapChain0;
 
@@ -162,6 +165,7 @@ namespace Microsoft::Console::Render::Atlas
             }
 
             _swapChain = swapChain0.query<IDXGISwapChain2>();
+            _frameLatencyWaitableObject.reset(_swapChain->GetFrameLatencyWaitableObject());
             _targetGeneration = p.s->target.generation();
             _targetSize = p.s->targetSize;
             _waitForPresentation = true;

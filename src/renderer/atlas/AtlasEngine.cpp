@@ -325,8 +325,9 @@ try
             .cursorType = gsl::narrow_cast<u16>(options.cursorType),
             .heightPercentage = gsl::narrow_cast<u8>(options.ulCursorHeightPercent),
         };
-        if (*_p.s->cursor != cachedOptions)
+        if (*_api.s->cursor != cachedOptions)
         {
+            *_api.s.write()->cursor.write() = cachedOptions;
             *_p.s.write()->cursor.write() = cachedOptions;
         }
     }
@@ -398,10 +399,10 @@ try
         _api.attributes = attributes;
         _api.flags = flags;
     }
-    else if (textAttributes.BackgroundIsDefault() && bg != _p.s->misc->backgroundColor)
+    else if (textAttributes.BackgroundIsDefault() && bg != _api.s->misc->backgroundColor)
     {
-        _p.s.write()->misc.write()->backgroundColor = bg;
         _api.s.write()->misc.write()->backgroundColor = bg;
+        _p.s.write()->misc.write()->backgroundColor = bg;
     }
 
     return S_OK;
@@ -451,7 +452,7 @@ void AtlasEngine::_recreateFontDependentResources()
                 const auto fontWeight = bold ? DWRITE_FONT_WEIGHT_BOLD : static_cast<DWRITE_FONT_WEIGHT>(_p.s->font->fontWeight);
 
                 // The wght axis defaults to the font weight.
-                fontAxisValues[0].value = bold || standardAxes[0].value == -1.0f ? static_cast<float>(fontWeight) : standardAxes[0].value;
+                fontAxisValues[0].value = bold || standardAxes[0].value == -1.0f ? static_cast<f32>(fontWeight) : standardAxes[0].value;
                 // The ital axis defaults to 1 if this is italic and 0 otherwise.
                 fontAxisValues[1].value = italic ? 1.0f : (standardAxes[1].value == -1.0f ? 0.0f : standardAxes[1].value);
                 // The slnt axis defaults to -12 if this is italic and 0 otherwise.
@@ -460,11 +461,11 @@ void AtlasEngine::_recreateFontDependentResources()
             }
         }
     }
-    
-    _p.d.font.dipPerPixel = static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(_p.s->font->dpi);
-    _p.d.font.pixelPerDIP = static_cast<float>(_p.s->font->dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
-    _p.d.font.cellSizeDIP.x = static_cast<float>(_p.s->font->cellSize.x) * _p.d.font.dipPerPixel;
-    _p.d.font.cellSizeDIP.y = static_cast<float>(_p.s->font->cellSize.y) * _p.d.font.dipPerPixel;
+
+    _p.d.font.dipPerPixel = static_cast<f32>(USER_DEFAULT_SCREEN_DPI) / static_cast<f32>(_p.s->font->dpi);
+    _p.d.font.pixelPerDIP = static_cast<f32>(_p.s->font->dpi) / static_cast<f32>(USER_DEFAULT_SCREEN_DPI);
+    _p.d.font.cellSizeDIP.x = static_cast<f32>(_p.s->font->cellSize.x) * _p.d.font.dipPerPixel;
+    _p.d.font.cellSizeDIP.y = static_cast<f32>(_p.s->font->cellSize.y) * _p.d.font.dipPerPixel;
 }
 
 void AtlasEngine::_recreateCellCountDependentResources()
@@ -576,15 +577,17 @@ void AtlasEngine::_flushBufferLine()
             continue;
         }
 
-        const auto initialIndicesCount = row.glyphIndices.size();
-
-        if (mappedLength > initialIndicesCount)
+        if (mappedLength > _api.glyphIndices.size())
         {
-            auto size = initialIndicesCount;
+            auto size = _api.glyphIndices.size();
             size = size + (size >> 1);
             size = std::max<size_t>(size, mappedLength);
+            Expects(size > _api.glyphIndices.size());
             _api.glyphIndices = Buffer<u16>{ size };
+            _api.glyphProps = Buffer<DWRITE_SHAPING_GLYPH_PROPERTIES>{ size };
         }
+
+        const auto initialIndicesCount = row.glyphIndices.size();
 
         // We can reuse idx here, as it'll be reset to "idx = mappedEnd" in the outer loop anyways.
         for (u32 complexityLength = 0; idx < mappedEnd; idx += complexityLength)
@@ -592,24 +595,19 @@ void AtlasEngine::_flushBufferLine()
             BOOL isTextSimple;
             THROW_IF_FAILED(_p.textAnalyzer->GetTextComplexity(_api.bufferLine.data() + idx, mappedEnd - idx, mappedFontFace.get(), &isTextSimple, &complexityLength, _api.glyphIndices.data()));
 
+#pragma warning(suppress : 4127)
             if (isTextSimple)
             {
                 for (size_t i = 0; i < complexityLength; ++i)
                 {
-                    const auto col = _api.bufferLineColumn[idx + i];
-                    const auto fg = _api.colorsForeground[col];
+                    const auto col1 = _api.bufferLineColumn[idx + i + 0];
+                    const auto fg = _api.colorsForeground[col1];
                     f32 glyphAdvance;
 
                     if constexpr (!debugProportionalText)
                     {
-                        for (size_t j = 1;; ++j)
-                        {
-                            if (col != _api.bufferLineColumn[idx + i + j])
-                            {
-                                glyphAdvance = j * _p.d.font.cellSizeDIP.x;
-                                break;
-                            }
-                        }
+                        const auto col2 = _api.bufferLineColumn[idx + i + 1];
+                        glyphAdvance = (col2 - col1) * _p.d.font.cellSizeDIP.x;
                     }
                     else
                     {
@@ -618,7 +616,7 @@ void AtlasEngine::_flushBufferLine()
 
                         DWRITE_GLYPH_METRICS glyphMetrics{};
                         THROW_IF_FAILED(mappedFontFace->GetDesignGlyphMetrics(&_api.glyphIndices[i], 1, &glyphMetrics, false));
-                        const auto designUnitsPerDIP = _p.s->font->fontSizeInDIP / static_cast<float>(metrics.designUnitsPerEm);
+                        const auto designUnitsPerDIP = _p.s->font->fontSizeInDIP / static_cast<f32>(metrics.designUnitsPerEm);
                         glyphAdvance = static_cast<f32>(glyphMetrics.advanceWidth) * designUnitsPerDIP;
                     }
 
@@ -680,7 +678,7 @@ void AtlasEngine::_flushBufferLine()
                             /* features            */ &features,
                             /* featureRangeLengths */ &featureRangeLengths,
                             /* featureRanges       */ featureRanges,
-                            /* maxGlyphCount       */ gsl::narrow_cast<u32>(_api.glyphProps.size()),
+                            /* maxGlyphCount       */ gsl::narrow_cast<u32>(_api.glyphIndices.size()),
                             /* clusterMap          */ _api.clusterMap.data(),
                             /* textProps           */ _api.textProps.data(),
                             /* glyphIndices        */ _api.glyphIndices.data(),
@@ -690,12 +688,12 @@ void AtlasEngine::_flushBufferLine()
                         if (hr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) && ++retry < 8)
                         {
                             // Grow factor 1.5x.
-                            auto size = _api.glyphProps.size();
+                            auto size = _api.glyphIndices.size();
                             size = size + (size >> 1);
                             // Overflow check.
-                            Expects(size > _api.glyphProps.size());
+                            Expects(size > _api.glyphIndices.size());
                             _api.glyphIndices = Buffer<u16>{ size };
-                            _api.glyphProps = Buffer<DWRITE_SHAPING_GLYPH_PROPERTIES>(size);
+                            _api.glyphProps = Buffer<DWRITE_SHAPING_GLYPH_PROPERTIES>{ size };
                             continue;
                         }
 
@@ -734,6 +732,7 @@ void AtlasEngine::_flushBufferLine()
                         /* glyphAdvances       */ _api.glyphAdvances.data(),
                         /* glyphOffsets        */ _api.glyphOffsets.data()));
 
+                    // TODO: <=a.textLength
                     _api.clusterMap[a.textLength] = gsl::narrow_cast<u16>(actualGlyphCount);
 
                     auto prevCluster = _api.clusterMap[0];

@@ -76,9 +76,6 @@ namespace Microsoft::Console::Render::Atlas
         wil::com_ptr<ID2D1Bitmap> _d2dBackgroundBitmap;
         wil::com_ptr<ID2D1BitmapBrush> _d2dBackgroundBrush;
 
-        wil::com_ptr<ID2D1Bitmap> _d2dForegroundBitmap;
-        wil::com_ptr<ID2D1BitmapBrush> _d2dForegroundBrush;
-
         til::generation_t _fontGeneration;
         til::generation_t _generation;
         u16x2 _cellCount;

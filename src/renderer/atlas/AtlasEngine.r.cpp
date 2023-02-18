@@ -82,7 +82,7 @@ CATCH_RETURN()
 
 [[nodiscard]] bool AtlasEngine::RequiresContinuousRedraw() noexcept
 {
-    return debugGeneralPerformance || (_b && _b->RequiresContinuousRedraw());
+    return debugContinuousRedraw || (_b && _b->RequiresContinuousRedraw());
 }
 
 void AtlasEngine::WaitUntilCanRender() noexcept

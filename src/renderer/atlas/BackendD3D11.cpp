@@ -500,8 +500,8 @@ void BackendD3D11::Render(const RenderingPayload& p)
             D2D1_RENDER_TARGET_PROPERTIES props{};
             props.type = D2D1_RENDER_TARGET_TYPE_DEFAULT;
             props.pixelFormat = { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED };
-            props.dpiX = static_cast<float>(p.s->font->dpi);
-            props.dpiY = static_cast<float>(p.s->font->dpi);
+            props.dpiX = static_cast<f32>(p.s->font->dpi);
+            props.dpiY = static_cast<f32>(p.s->font->dpi);
             wil::com_ptr<ID2D1RenderTarget> renderTarget;
             THROW_IF_FAILED(p.d2dFactory->CreateDxgiSurfaceRenderTarget(surface.get(), &props, renderTarget.addressof()));
             _d2dRenderTarget = renderTarget.query<ID2D1DeviceContext>();
@@ -637,83 +637,83 @@ void BackendD3D11::Render(const RenderingPayload& p)
                         if (WI_IsFlagSet(flags, CellFlags::BorderLeft))
                         {
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top),
-                                static_cast<float>(p.s->font->thinLineWidth),
-                                static_cast<float>(p.s->font->cellSize.y),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top),
+                                static_cast<f32>(p.s->font->thinLineWidth),
+                                static_cast<f32>(p.s->font->cellSize.y),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::BorderTop))
                         {
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->thinLineWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->thinLineWidth),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::BorderRight))
                         {
                             ref.rect = {
-                                static_cast<float>(left + p.s->font->cellSize.x - p.s->font->thinLineWidth),
-                                static_cast<float>(top),
-                                static_cast<float>(p.s->font->thinLineWidth),
-                                static_cast<float>(p.s->font->cellSize.y),
+                                static_cast<f32>(left + p.s->font->cellSize.x - p.s->font->thinLineWidth),
+                                static_cast<f32>(top),
+                                static_cast<f32>(p.s->font->thinLineWidth),
+                                static_cast<f32>(p.s->font->cellSize.y),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::BorderBottom))
                         {
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top + p.s->font->cellSize.y - p.s->font->thinLineWidth),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->thinLineWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top + p.s->font->cellSize.y - p.s->font->thinLineWidth),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->thinLineWidth),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::Underline))
                         {
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top + p.s->font->underlinePos),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->underlineWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top + p.s->font->underlinePos),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->underlineWidth),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::UnderlineDotted))
                         {
                             // TODO
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top + p.s->font->underlinePos),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->underlineWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top + p.s->font->underlinePos),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->underlineWidth),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::UnderlineDouble))
                         {
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top + p.s->font->doubleUnderlinePos.x),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->thinLineWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top + p.s->font->doubleUnderlinePos.x),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->thinLineWidth),
                             };
                             auto& ref2 = _vertexInstanceData.emplace_back();
                             ref2.color = meta.colors.x;
                             ref2.shadingType = 2;
                             ref2.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top + p.s->font->doubleUnderlinePos.y),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->thinLineWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top + p.s->font->doubleUnderlinePos.y),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->thinLineWidth),
                             };
                         }
                         if (WI_IsFlagSet(flags, CellFlags::Strikethrough))
                         {
                             ref.rect = {
-                                static_cast<float>(left),
-                                static_cast<float>(top + p.s->font->strikethroughPos),
-                                static_cast<float>(p.s->font->cellSize.x),
-                                static_cast<float>(p.s->font->strikethroughWidth),
+                                static_cast<f32>(left),
+                                static_cast<f32>(top + p.s->font->strikethroughPos),
+                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(p.s->font->strikethroughWidth),
                             };
                         }
                     }
@@ -827,8 +827,8 @@ void BackendD3D11::Render(const RenderingPayload& p)
 
             // RS: Rasterizer Stage
             D3D11_VIEWPORT viewport{};
-            viewport.Width = static_cast<float>(p.s->targetSize.x);
-            viewport.Height = static_cast<float>(p.s->targetSize.y);
+            viewport.Width = static_cast<f32>(p.s->targetSize.x);
+            viewport.Height = static_cast<f32>(p.s->targetSize.y);
             _deviceContext->RSSetViewports(1, &viewport);
             _deviceContext->RSSetState(_rasterizerState.get());
 

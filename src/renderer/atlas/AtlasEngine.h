@@ -121,12 +121,6 @@ namespace Microsoft::Console::Render::Atlas
 
         // AtlasEngine.r.cpp
 
-        static constexpr bool debugProportionalText = false;
-        static constexpr bool debugForceD2DMode = true;
-        static constexpr bool debugGlyphGenerationPerformance = false;
-        static constexpr bool debugTextParsingPerformance = true;
-        static constexpr bool debugGeneralPerformance = true;
-
         static constexpr u16 u16min = 0x0000;
         static constexpr u16 u16max = 0xffff;
         static constexpr i16 i16min = -0x8000;

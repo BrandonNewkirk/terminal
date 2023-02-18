@@ -9,6 +9,12 @@
 
 namespace Microsoft::Console::Render::Atlas
 {
+    inline constexpr bool debugProportionalText = false;
+    inline constexpr bool debugForceD2DMode = true;
+    inline constexpr bool debugGlyphGenerationPerformance = false;
+    inline constexpr bool debugTextParsingPerformance = false;
+    inline constexpr bool debugContinuousRedraw = false;
+
 #define ATLAS_POD_OPS(type)                                           \
     constexpr auto operator<=>(const type&) const noexcept = default; \
                                                                       \
@@ -278,7 +284,7 @@ namespace Microsoft::Console::Render::Atlas
         T* _data = nullptr;
         size_t _size = 0;
     };
-    
+
     struct TargetSettings
     {
         HWND hwnd = nullptr;
