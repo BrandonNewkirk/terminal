@@ -124,8 +124,8 @@ namespace Microsoft::Console::Render::Atlas
         static constexpr bool debugProportionalText = false;
         static constexpr bool debugForceD2DMode = true;
         static constexpr bool debugGlyphGenerationPerformance = false;
-        static constexpr bool debugTextParsingPerformance = false || debugGlyphGenerationPerformance;
-        static constexpr bool debugGeneralPerformance = false || debugTextParsingPerformance;
+        static constexpr bool debugTextParsingPerformance = true;
+        static constexpr bool debugGeneralPerformance = true;
 
         static constexpr u16 u16min = 0x0000;
         static constexpr u16 u16max = 0xffff;

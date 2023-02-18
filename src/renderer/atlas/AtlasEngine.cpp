@@ -163,7 +163,7 @@ try
         _p.rows[y].clear();
     }
 
-    _api.dirtyRect = til::rect{ 0, 0, _p.s->cellCount.x, _p.s->cellCount.y }; //til::rect{ 0, _api.invalidatedRows.x, _p.s->cellCount.x, _api.invalidatedRows.y };
+    _api.dirtyRect = til::rect{ 0, _api.invalidatedRows.x, _p.s->cellCount.x, _api.invalidatedRows.y };
     _p.dirtyRect = _api.dirtyRect;
     _p.scrollOffset = _api.scrollOffset;
 

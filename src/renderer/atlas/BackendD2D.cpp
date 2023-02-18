@@ -73,11 +73,11 @@ void BackendD2D::Render(const RenderingPayload& p)
                 .dpiY = static_cast<float>(p.s->font->dpi),
             };
             const D2D1_SIZE_U size{ p.s->cellCount.x, p.s->cellCount.y };
-            const D2D1_MATRIX_3X2_F transform {
+            const D2D1_MATRIX_3X2_F transform{
                 ._11 = static_cast<float>(p.s->font->cellSize.x),
                 ._22 = static_cast<float>(p.s->font->cellSize.y),
             };
-            
+
             {
                 THROW_IF_FAILED(_d2dRenderTarget->CreateBitmap(size, nullptr, 0, &props, _d2dBackgroundBitmap.put()));
                 THROW_IF_FAILED(_d2dRenderTarget->CreateBitmapBrush(_d2dBackgroundBitmap.get(), _d2dBackgroundBrush.put()));
@@ -99,38 +99,80 @@ void BackendD2D::Render(const RenderingPayload& p)
 
     _d2dRenderTarget->BeginDraw();
     {
-        _d2dRenderTarget->Clear();
-
         // Let's say the terminal is 120x30 cells and 1200x600 pixels large respectively.
         // This draws the background color by upscaling a 120x30 pixel bitmap to fill the 1200x600 pixel render target.
         {
-            const D2D1_RECT_F rect{ 0, 0, p.s->cellCount.x * p.d.font.cellSizeDIP.x, p.s->cellCount.y * p.d.font.cellSizeDIP.y };
             _d2dBackgroundBitmap->CopyFromMemory(nullptr, p.backgroundBitmap.data(), p.s->cellCount.x * 4);
-            _d2dRenderTarget->FillRectangle(&rect, _d2dBackgroundBrush.get());
+            _d2dForegroundBitmap->CopyFromMemory(nullptr, p.foregroundBitmap.data(), p.s->cellCount.x * 4);
         }
 
         {
             const D2D1_RECT_F rect{ 0, 0, p.s->cellCount.x * p.d.font.cellSizeDIP.x, p.s->cellCount.y * p.d.font.cellSizeDIP.y };
-            _d2dForegroundBitmap->CopyFromMemory(nullptr, p.foregroundBitmap.data(), p.s->cellCount.x * 4);
+            _d2dRenderTarget->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_COPY);
+            _d2dRenderTarget->FillRectangle(&rect, _d2dBackgroundBrush.get());
+            _d2dRenderTarget->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
         }
 
         size_t y = 0;
         for (const auto& row : p.rows)
         {
-            for (const auto& m : row.mappings)
+            if constexpr (true)
             {
-                const DWRITE_GLYPH_RUN glyphRun{
-                    .fontFace = m.fontFace.get(),
-                    .fontEmSize = m.fontEmSize,
-                    .glyphCount = m.glyphsTo - m.glyphsFrom,
-                    .glyphIndices = &row.glyphIndices[m.glyphsFrom],
-                    .glyphAdvances = &row.glyphAdvances[m.glyphsFrom],
-                    .glyphOffsets = &row.glyphOffsets[m.glyphsFrom],
-                };
-                const D2D1_POINT_2F baseline{
-                    .y = p.d.font.cellSizeDIP.y * y + p.s->font->baselineInDIP,
-                };
-                _drawGlyphRun(p.dwriteFactory4.get(), _d2dRenderTarget.get(), _d2dRenderTarget4.get(), baseline, &glyphRun, _d2dForegroundBrush.get());
+                float x = 0.0f;
+                for (const auto& m : row.mappings)
+                {
+                    const auto beg = row.colors.begin();
+                    auto it = row.colors.begin() + m.glyphsFrom;
+                    const auto end = row.colors.begin() + m.glyphsTo;
+
+                    do
+                    {
+                        const auto beg2 = it;
+                        const auto off = it - beg;
+                        const auto fg = *it;
+
+                        while (++it != end && *it == fg)
+                        {
+                        }
+
+                        const auto brush = _brushWithColor(fg);
+                        const DWRITE_GLYPH_RUN glyphRun{
+                            .fontFace = m.fontFace.get(),
+                            .fontEmSize = m.fontEmSize,
+                            .glyphCount = static_cast<UINT32>(it - beg2),
+                            .glyphIndices = &row.glyphIndices[off],
+                            .glyphAdvances = &row.glyphAdvances[off],
+                            .glyphOffsets = &row.glyphOffsets[off],
+                        };
+                        const D2D1_POINT_2F baseline{
+                            .x = x,
+                            .y = p.d.font.cellSizeDIP.y * y + p.s->font->baselineInDIP,
+                        };
+                        _drawGlyphRun(p.dwriteFactory4.get(), _d2dRenderTarget.get(), _d2dRenderTarget4.get(), baseline, &glyphRun, brush);
+                        for (UINT32 i = 0; i < glyphRun.glyphCount; ++i)
+                        {
+                            x += glyphRun.glyphAdvances[i];
+                        }
+                    } while (it != end);
+                }
+            }
+            else
+            {
+                for (const auto& m : row.mappings)
+                {
+                    const DWRITE_GLYPH_RUN glyphRun{
+                        .fontFace = m.fontFace.get(),
+                        .fontEmSize = m.fontEmSize,
+                        .glyphCount = m.glyphsTo - m.glyphsFrom,
+                        .glyphIndices = &row.glyphIndices[m.glyphsFrom],
+                        .glyphAdvances = &row.glyphAdvances[m.glyphsFrom],
+                        .glyphOffsets = &row.glyphOffsets[m.glyphsFrom],
+                    };
+                    const D2D1_POINT_2F baseline{
+                        .y = p.d.font.cellSizeDIP.y * y + p.s->font->baselineInDIP,
+                    };
+                    _drawGlyphRun(p.dwriteFactory4.get(), _d2dRenderTarget.get(), _d2dRenderTarget4.get(), baseline, &glyphRun, _d2dForegroundBrush.get());
+                }
             }
 
             y++;

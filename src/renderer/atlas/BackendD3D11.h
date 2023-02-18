@@ -240,6 +240,12 @@ namespace Microsoft::Console::Render::Atlas
         u32 _instanceCount = 6;
 
         bool _requiresContinuousRedraw = false;
+        
+        float _gamma = 0;
+        float _cleartypeEnhancedContrast = 0;
+        float _grayscaleEnhancedContrast = 0;
+        u32 _brushColor = 0;
+        u16x2 _cellCount;
 
         til::generation_t _generation;
         til::generation_t _fontGeneration;
@@ -249,11 +255,6 @@ namespace Microsoft::Console::Render::Atlas
         std::filesystem::path _sourceDirectory;
         wil::unique_folder_change_reader_nothrow _sourceCodeWatcher;
         std::atomic<int64_t> _sourceCodeInvalidationTime{ INT64_MAX };
-        float _gamma = 0;
-        float _cleartypeEnhancedContrast = 0;
-        float _grayscaleEnhancedContrast = 0;
-        u32 _brushColor = 0;
-        u16x2 _cellCount;
 #endif
     };
 }
