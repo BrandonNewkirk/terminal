@@ -72,7 +72,7 @@ BackendD3D11::BackendD3D11(wil::com_ptr<ID3D11Device2> device, wil::com_ptr<ID3D
     {
         D3D11_BLEND_DESC1 desc{};
         desc.RenderTarget[0] = {
-            .LogicOpEnable = true,
+            .LogicOpEnable = TRUE,
             .LogicOp = D3D11_LOGIC_OP_XOR,
             .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE,
         };
@@ -99,7 +99,7 @@ BackendD3D11::BackendD3D11(wil::com_ptr<ID3D11Device2> device, wil::com_ptr<ID3D
             {
                 return nullptr;
             }
-            const auto NvAPI_QueryInterface = reinterpret_cast<NvAPI_QueryInterface_t>(GetProcAddress(module, "nvapi_QueryInterface"));
+            const auto NvAPI_QueryInterface = reinterpret_cast<NvAPI_QueryInterface_t>(GetProcAddress(module, "nvapi_QueryInterface")); // NOLINT(clang-diagnostic-cast-function-type)
             if (!NvAPI_QueryInterface)
             {
                 return nullptr;
@@ -175,12 +175,14 @@ BackendD3D11::BackendD3D11(wil::com_ptr<ID3D11Device2> device, wil::com_ptr<ID3D
             { 0, 1 },
             { 0, 0 },
         };
+        static constexpr D3D11_SUBRESOURCE_DATA initialData{
+            .pSysMem = &vertices[0],
+        };
 
         D3D11_BUFFER_DESC desc{};
         desc.ByteWidth = sizeof(vertices);
         desc.Usage = D3D11_USAGE_IMMUTABLE;
         desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        const D3D11_SUBRESOURCE_DATA initialData{ &vertices[0] };
         THROW_IF_FAILED(_device->CreateBuffer(&desc, &initialData, _vertexBuffers[0].put()));
     }
 
@@ -796,7 +798,7 @@ void BackendD3D11::Render(const RenderingPayload& p)
 #pragma warning(suppress : 26494) // Variable 'mapped' is uninitialized. Always initialize an object (type.5).
         D3D11_MAPPED_SUBRESOURCE mapped;
         THROW_IF_FAILED(_deviceContext->Map(_perCellColor.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped));
-        for (auto i = 0; i < p.s->cellCount.y; ++i)
+        for (size_t i = 0; i < p.s->cellCount.y; ++i)
         {
             memcpy(mapped.pData, p.backgroundBitmap.data() + i * p.s->cellCount.x, p.s->cellCount.x * sizeof(u32));
             mapped.pData = static_cast<void*>(static_cast<std::byte*>(mapped.pData) + mapped.RowPitch);
@@ -938,7 +940,7 @@ void BackendD3D11::_drawGlyph(const RenderingPayload& p, GlyphCacheEntry& entry,
     entry.xy.y = gsl::narrow_cast<u16>(rect.y);
     entry.wh.x = gsl::narrow_cast<u16>(rect.w);
     entry.wh.y = gsl::narrow_cast<u16>(rect.h);
-    entry.offset.x = gsl::narrow_cast<u16>(box.left);
-    entry.offset.y = gsl::narrow_cast<u16>(box.top);
+    entry.offset.x = gsl::narrow_cast<i16>(box.left);
+    entry.offset.y = gsl::narrow_cast<i16>(box.top);
     entry.colorGlyph = colorGlyph;
 }

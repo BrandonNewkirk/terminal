@@ -439,7 +439,7 @@ void AtlasEngine::_recreateFontDependentResources()
     {
         // See AtlasEngine::UpdateFont.
         // It hardcodes indices 0/1/2 in fontAxisValues to the weight/italic/slant axes.
-        // If they're -1.0f they haven't been set by the user and must be filled by us.
+        // If they're NAN they haven't been set by the user and must be filled by us.
         // When we call SetFontAxisValues() we basically override (disable) DirectWrite's internal font axes,
         // and if either of the 3 aren't set we'd make it impossible for the user to see bold/italic text.
         const auto& standardAxes = _p.s->font->fontAxisValues;
@@ -452,11 +452,11 @@ void AtlasEngine::_recreateFontDependentResources()
                 const auto fontWeight = bold ? DWRITE_FONT_WEIGHT_BOLD : static_cast<DWRITE_FONT_WEIGHT>(_p.s->font->fontWeight);
 
                 // The wght axis defaults to the font weight.
-                fontAxisValues[0].value = bold || standardAxes[0].value == -1.0f ? static_cast<f32>(fontWeight) : standardAxes[0].value;
+                fontAxisValues[0].value = bold || isnan(standardAxes[0].value) ? static_cast<f32>(fontWeight) : standardAxes[0].value;
                 // The ital axis defaults to 1 if this is italic and 0 otherwise.
-                fontAxisValues[1].value = italic ? 1.0f : (standardAxes[1].value == -1.0f ? 0.0f : standardAxes[1].value);
+                fontAxisValues[1].value = italic ? 1.0f : (isnan(standardAxes[1].value) ? 0.0f : standardAxes[1].value);
                 // The slnt axis defaults to -12 if this is italic and 0 otherwise.
-                fontAxisValues[2].value = italic ? -12.0f : (standardAxes[2].value == -1.0f ? 0.0f : standardAxes[2].value);
+                fontAxisValues[2].value = italic ? -12.0f : (isnan(standardAxes[2].value) ? 0.0f : standardAxes[2].value);
                 _p.d.font.textFormatAxes[italic][bold] = { fontAxisValues.data(), fontAxisValues.size() };
             }
         }

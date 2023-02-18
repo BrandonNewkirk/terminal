@@ -61,9 +61,7 @@ try
     {
         _recreateBackend();
     }
-
-    const til::rect fullRect{ 0, 0, _p.s->cellCount.x, _p.s->cellCount.y };
-
+    
     _b->Render(_p);
 
     if (!_p.dxgiFactory->IsCurrent())

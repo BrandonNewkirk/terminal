@@ -281,7 +281,7 @@ CATCH_RETURN()
     wil::com_ptr<IDWriteTextLayout> textLayout;
     RETURN_IF_FAILED(_p.dwriteFactory->CreateTextLayout(glyph.data(), gsl::narrow_cast<uint32_t>(glyph.size()), textFormat.get(), FLT_MAX, FLT_MAX, textLayout.addressof()));
 
-    DWRITE_TEXT_METRICS metrics;
+    DWRITE_TEXT_METRICS metrics{};
     RETURN_IF_FAILED(textLayout->GetMetrics(&metrics));
 
     const auto minWidth = (_api.s->font->cellSize.x * 1.2f);
@@ -371,6 +371,7 @@ void AtlasEngine::SetForceFullRepaintRendering(bool enable) noexcept
 }
 
 void AtlasEngine::SetPixelShaderPath(std::wstring_view value) noexcept
+try
 {
     if (_api.s->misc->customPixelShaderPath != value)
     {
@@ -378,6 +379,7 @@ void AtlasEngine::SetPixelShaderPath(std::wstring_view value) noexcept
         _resolveTransparencySettings();
     }
 }
+CATCH_LOG()
 
 void AtlasEngine::SetRetroTerminalEffect(bool enable) noexcept
 {
@@ -523,9 +525,9 @@ void AtlasEngine::_updateFont(const wchar_t* faceName, const FontInfoDesired& fo
 
         // AtlasEngine::_recreateFontDependentResources() relies on these fields to
         // exist in this particular order in order to create appropriate default axes.
-        fontAxisValues.emplace_back(DWRITE_FONT_AXIS_VALUE{ DWRITE_FONT_AXIS_TAG_WEIGHT, -1.0f });
-        fontAxisValues.emplace_back(DWRITE_FONT_AXIS_VALUE{ DWRITE_FONT_AXIS_TAG_ITALIC, -1.0f });
-        fontAxisValues.emplace_back(DWRITE_FONT_AXIS_VALUE{ DWRITE_FONT_AXIS_TAG_SLANT, -1.0f });
+        fontAxisValues.emplace_back(DWRITE_FONT_AXIS_VALUE{ DWRITE_FONT_AXIS_TAG_WEIGHT, NAN });
+        fontAxisValues.emplace_back(DWRITE_FONT_AXIS_VALUE{ DWRITE_FONT_AXIS_TAG_ITALIC, NAN });
+        fontAxisValues.emplace_back(DWRITE_FONT_AXIS_VALUE{ DWRITE_FONT_AXIS_TAG_SLANT, NAN });
 
         for (const auto& p : axes)
         {
@@ -598,7 +600,7 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
     wil::com_ptr<IDWriteFontFace> fontFace;
     THROW_IF_FAILED(font->CreateFontFace(fontFace.addressof()));
 
-    DWRITE_FONT_METRICS metrics;
+    DWRITE_FONT_METRICS metrics{};
     fontFace->GetMetrics(&metrics);
 
     // According to Wikipedia:
@@ -610,13 +612,13 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
     u16 glyphIndex;
     THROW_IF_FAILED(fontFace->GetGlyphIndicesW(&codePoint, 1, &glyphIndex));
 
-    DWRITE_GLYPH_METRICS glyphMetrics;
+    DWRITE_GLYPH_METRICS glyphMetrics{};
     THROW_IF_FAILED(fontFace->GetDesignGlyphMetrics(&glyphIndex, 1, &glyphMetrics));
 
     // Point sizes are commonly treated at a 72 DPI scale
     // (including by OpenType), whereas DirectWrite uses 96 DPI.
     // Since we want the height in px we multiply by the display's DPI.
-    const auto dpi = _api.s->font->dpi;
+    const auto dpi = static_cast<f32>(_api.s->font->dpi);
     const auto fontSizeInDIP = fontSize / 72.0f * 96.0f;
     const auto fontSizeInPx = fontSize / 72.0f * dpi;
 
@@ -705,7 +707,7 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
         fontMetrics->fontCollection = std::move(fontCollection);
         fontMetrics->fontFamily = std::move(fontFamily);
         fontMetrics->fontName = std::move(fontName);
-        fontMetrics->baselineInDIP = baseline / static_cast<f32>(dpi) * 96.0f;
+        fontMetrics->baselineInDIP = baseline / dpi * 96.0f;
         fontMetrics->fontSizeInDIP = fontSizeInDIP;
         fontMetrics->advanceScale = cellWidth / adjustedWidth;
         fontMetrics->cellSize = { cellWidth, cellHeight };
@@ -716,6 +718,6 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
         fontMetrics->strikethroughWidth = strikethroughWidthU16;
         fontMetrics->doubleUnderlinePos = { doubleUnderlinePosTopU16, doubleUnderlinePosBottomU16 };
         fontMetrics->thinLineWidth = thinLineWidthU16;
-        fontMetrics->dpi = dpi;
+        fontMetrics->dpi = _api.s->font->dpi;
     }
 }
