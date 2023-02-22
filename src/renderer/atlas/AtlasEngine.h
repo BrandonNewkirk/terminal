@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "../../renderer/inc/IRenderEngine.hpp"
 #include "common.h"
 #include "DWriteTextAnalysis.h"
 
@@ -79,26 +78,6 @@ namespace Microsoft::Console::Render::Atlas
         void UpdateHyperlinkHoveredId(uint16_t hoveredId) noexcept override;
 
     private:
-        // These flags are shared with shader_ps.hlsl.
-        // If you change this be sure to copy it over to shader_ps.hlsl.
-        //
-        // clang-format off
-        enum class CellFlags : u32
-        {
-            None            = 0x00000000,
-
-            BorderLeft      = 0x00000020,
-            BorderTop       = 0x00000040,
-            BorderRight     = 0x00000080,
-            BorderBottom    = 0x00000100,
-            Underline       = 0x00000200,
-            UnderlineDotted = 0x00000400,
-            UnderlineDouble = 0x00000800,
-            Strikethrough   = 0x00001000,
-        };
-        // clang-format on
-        ATLAS_FLAG_OPS(CellFlags, u32)
-
         struct AtlasKeyAttributes
         {
             bool bold = false;
@@ -108,10 +87,8 @@ namespace Microsoft::Console::Render::Atlas
         };
         
         // AtlasEngine.cpp
-        [[nodiscard]] HRESULT _handleException(const wil::ResultException& exception) noexcept;
         __declspec(noinline) void _recreateFontDependentResources();
         __declspec(noinline) void _recreateCellCountDependentResources();
-        const Buffer<DWRITE_FONT_AXIS_VALUE>& _getTextFormatAxis(bool bold, bool italic) const noexcept;
         void _flushBufferLine();
 
         // AtlasEngine.api.cpp
@@ -162,10 +139,8 @@ namespace Microsoft::Console::Render::Atlas
             u32x2 currentColor;
             AtlasKeyAttributes attributes{};
             u16x2 lastPaintBufferLineCoord;
-            CellFlags flags = CellFlags::None;
             // UpdateHyperlinkHoveredId()
             u16 hyperlinkHoveredId = 0;
-            bool bufferLineWasHyperlinked = false;
 
             // dirtyRect is a computed value based on invalidatedRows.
             til::rect dirtyRect;

@@ -169,10 +169,6 @@ try
 
     return S_OK;
 }
-catch (const wil::ResultException& exception)
-{
-    return _handleException(exception);
-}
 CATCH_RETURN()
 
 [[nodiscard]] HRESULT AtlasEngine::EndPaint() noexcept
@@ -261,7 +257,6 @@ try
     }
 
     _api.lastPaintBufferLineCoord = { x, y };
-    _api.bufferLineWasHyperlinked = false;
 
     return S_OK;
 }
@@ -270,17 +265,13 @@ CATCH_RETURN()
 [[nodiscard]] HRESULT AtlasEngine::PaintBufferGridLines(const GridLineSet lines, const COLORREF color, const size_t cchLine, const til::point coordTarget) noexcept
 try
 {
-    if (!_api.bufferLineWasHyperlinked && lines.test(GridLines::Underline) && WI_IsFlagClear(_api.flags, CellFlags::Underline))
-    {
-        _api.bufferLineWasHyperlinked = true;
-
-        WI_UpdateFlagsInMask(_api.flags, CellFlags::Underline | CellFlags::UnderlineDotted | CellFlags::UnderlineDouble, CellFlags::Underline);
-
-        //const BufferLineMetadata metadata{ _api.currentColor, _api.flags };
-        //const auto y = _api.lastPaintBufferLineCoord.y;
-        //const auto x = _api.lastPaintBufferLineCoord.x;
-        //std::fill_n(_getBufferLineMetadata(x, y), _r.metadata.size() - x, metadata);
-    }
+    const auto y = gsl::narrow_cast<u16>(clamp<til::CoordType>(coordTarget.y, 0, _p.s->cellCount.y));
+    const auto from = gsl::narrow_cast<u16>(clamp<til::CoordType>(coordTarget.x, 0, _p.s->cellCount.x - 1));
+    const auto to = gsl::narrow_cast<u16>(clamp<size_t>(coordTarget.x + cchLine, from, _p.s->cellCount.x));
+    const auto fg = gsl::narrow_cast<u32>(color) | 0xff000000;
+    auto& row = _p.rows[y];
+    
+    row.gridLineRanges.emplace_back(lines, fg, from, to);
     return S_OK;
 }
 CATCH_RETURN()
@@ -293,19 +284,13 @@ try
     // As such we got to call _flushBufferLine() here just to be sure.
     _flushBufferLine();
 
-    const u16r u16rect{
-        rect.narrow_left<u16>(),
-        rect.narrow_top<u16>(),
-        rect.narrow_right<u16>(),
-        rect.narrow_bottom<u16>(),
-    };
-
-    const auto row = gsl::narrow_cast<u16>(clamp<til::CoordType>(rect.top, 0, _p.s->cellCount.y));
+    const auto y = gsl::narrow_cast<u16>(clamp<til::CoordType>(rect.top, 0, _p.s->cellCount.y));
     const auto from = gsl::narrow_cast<u16>(clamp<til::CoordType>(rect.left, 0, _p.s->cellCount.x - 1));
     const auto to = gsl::narrow_cast<u16>(clamp<til::CoordType>(rect.right, from, _p.s->cellCount.x));
+    auto& row = _p.rows[y];
 
-    _p.rows[row].selectionFrom = from;
-    _p.rows[row].selectionTo = to;
+    row.selectionFrom = from;
+    row.selectionTo = to;
     _p.dirtyRect |= rect;
     return S_OK;
 }
@@ -366,24 +351,6 @@ try
 
     if (!isSettingDefaultBrushes)
     {
-        const auto hyperlinkId = textAttributes.GetHyperlinkId();
-
-        auto flags = CellFlags::None;
-        WI_SetFlagIf(flags, CellFlags::BorderLeft, textAttributes.IsLeftVerticalDisplayed());
-        WI_SetFlagIf(flags, CellFlags::BorderTop, textAttributes.IsTopHorizontalDisplayed());
-        WI_SetFlagIf(flags, CellFlags::BorderRight, textAttributes.IsRightVerticalDisplayed());
-        WI_SetFlagIf(flags, CellFlags::BorderBottom, textAttributes.IsBottomHorizontalDisplayed());
-        WI_SetFlagIf(flags, CellFlags::Underline, textAttributes.IsUnderlined());
-        WI_SetFlagIf(flags, CellFlags::UnderlineDotted, hyperlinkId != 0);
-        WI_SetFlagIf(flags, CellFlags::UnderlineDouble, textAttributes.IsDoublyUnderlined());
-        WI_SetFlagIf(flags, CellFlags::Strikethrough, textAttributes.IsCrossedOut());
-
-        if (_api.hyperlinkHoveredId && _api.hyperlinkHoveredId == hyperlinkId)
-        {
-            WI_SetFlag(flags, CellFlags::Underline);
-            WI_ClearAllFlags(flags, CellFlags::UnderlineDotted | CellFlags::UnderlineDouble);
-        }
-
         const u32x2 newColors{ gsl::narrow_cast<u32>(fg), gsl::narrow_cast<u32>(bg) };
         const AtlasKeyAttributes attributes{
             .bold = textAttributes.IsIntense() && renderSettings.GetRenderMode(RenderSettings::Mode::IntenseIsBold),
@@ -397,7 +364,6 @@ try
 
         _api.currentColor = newColors;
         _api.attributes = attributes;
-        _api.flags = flags;
     }
     else if (textAttributes.BackgroundIsDefault() && bg != _api.s->misc->backgroundColor)
     {
@@ -410,28 +376,6 @@ try
 CATCH_RETURN()
 
 #pragma endregion
-
-[[nodiscard]] HRESULT AtlasEngine::_handleException(const wil::ResultException& exception) noexcept
-{
-    const auto hr = exception.GetErrorCode();
-    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == D2DERR_RECREATE_TARGET)
-    {
-        _p.dxgiFactory.reset();
-        _b.reset();
-        return E_PENDING; // Indicate a retry to the renderer
-    }
-
-    if (_p.warningCallback)
-    {
-        try
-        {
-            _p.warningCallback(hr);
-        }
-        CATCH_LOG()
-    }
-
-    return hr;
-}
 
 void AtlasEngine::_recreateFontDependentResources()
 {
@@ -494,11 +438,6 @@ void AtlasEngine::_recreateCellCountDependentResources()
     _p.foregroundBitmap = std::vector<u32>(static_cast<size_t>(_p.s->cellCount.x) * _p.s->cellCount.y);
 }
 
-const Buffer<DWRITE_FONT_AXIS_VALUE>& AtlasEngine::_getTextFormatAxis(bool bold, bool italic) const noexcept
-{
-    return _p.d.font.textFormatAxes[italic][bold];
-}
-
 void AtlasEngine::_flushBufferLine()
 {
     if (_api.bufferLine.empty())
@@ -515,7 +454,7 @@ void AtlasEngine::_flushBufferLine()
     Expects(_api.bufferLineColumn.size() == _api.bufferLine.size() + 1);
 
     auto& row = _p.rows[_api.lastPaintBufferLineCoord.y];
-    const auto& textFormatAxis = _getTextFormatAxis(_api.attributes.bold, _api.attributes.italic);
+    const auto& textFormatAxis = _p.d.font.textFormatAxes[_api.attributes.italic][_api.attributes.bold];
 
     TextAnalysisSource analysisSource{ _api.bufferLine.data(), gsl::narrow<UINT32>(_api.bufferLine.size()) };
     TextAnalysisSink analysisSink{ _api.analysisResults };

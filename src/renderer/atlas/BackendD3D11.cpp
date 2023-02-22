@@ -79,67 +79,6 @@ BackendD3D11::BackendD3D11(wil::com_ptr<ID3D11Device2> device, wil::com_ptr<ID3D
         THROW_IF_FAILED(_device->CreateBlendState1(&desc, _invertCursorBlendState.put()));
     }
 
-    if constexpr (debugNvidiaQuadFill)
-    {
-        // Quick hack to test NVAPI_QUAD_FILLMODE_BBOX if needed.
-        struct NvAPI_D3D11_RASTERIZER_DESC_EX : D3D11_RASTERIZER_DESC
-        {
-            UINT8 _padding1[40];
-            INT QuadFillMode; // Set to 1 for NVAPI_QUAD_FILLMODE_BBOX
-            UINT8 _padding2[67];
-        };
-
-        using NvAPI_QueryInterface_t = PVOID(__cdecl*)(UINT);
-        using NvAPI_Initialize_t = INT(__cdecl*)();
-        using NvAPI_D3D11_CreateRasterizerState_t = INT(__cdecl*)(ID3D11Device*, const NvAPI_D3D11_RASTERIZER_DESC_EX*, ID3D11RasterizerState**);
-
-        static const auto NvAPI_D3D11_CreateRasterizerState = []() -> NvAPI_D3D11_CreateRasterizerState_t {
-            const auto module = LoadLibraryExW(L"nvapi64.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-            if (!module)
-            {
-                return nullptr;
-            }
-            const auto NvAPI_QueryInterface = reinterpret_cast<NvAPI_QueryInterface_t>(GetProcAddress(module, "nvapi_QueryInterface")); // NOLINT(clang-diagnostic-cast-function-type)
-            if (!NvAPI_QueryInterface)
-            {
-                return nullptr;
-            }
-            const auto NvAPI_Initialize = reinterpret_cast<NvAPI_Initialize_t>(NvAPI_QueryInterface(0x0150E828));
-            if (!NvAPI_Initialize)
-            {
-                return nullptr;
-            }
-            const auto func = reinterpret_cast<NvAPI_D3D11_CreateRasterizerState_t>(NvAPI_QueryInterface(0xDB8D28AF));
-            if (!NvAPI_Initialize)
-            {
-                return nullptr;
-            }
-            if (NvAPI_Initialize())
-            {
-                return nullptr;
-            }
-            return func;
-        }();
-
-        if (NvAPI_D3D11_CreateRasterizerState)
-        {
-            NvAPI_D3D11_RASTERIZER_DESC_EX desc{};
-            desc.FillMode = D3D11_FILL_SOLID;
-            desc.CullMode = D3D11_CULL_NONE;
-            desc.QuadFillMode = 1;
-            if (const auto status = NvAPI_D3D11_CreateRasterizerState(_device.get(), &desc, _rasterizerState.put()))
-            {
-                LOG_HR_MSG(E_UNEXPECTED, "failed to set QuadFillMode with: %d", status);
-                THROW_IF_FAILED(_device->CreateRasterizerState(&desc, _rasterizerState.put()));
-                _instanceCount = 6;
-            }
-            else
-            {
-                _instanceCount = 3;
-            }
-        }
-    }
-    else
     {
         D3D11_RASTERIZER_DESC desc{};
         desc.FillMode = D3D11_FILL_SOLID;
@@ -537,10 +476,6 @@ void BackendD3D11::Render(const RenderingPayload& p)
         }
     }
 
-    vec2<size_t> textRange;
-    vec2<size_t> cursorRange;
-    vec2<size_t> selectionRange;
-
     {
         _vertexInstanceData.clear();
 
@@ -550,13 +485,11 @@ void BackendD3D11::Render(const RenderingPayload& p)
             ref.rect = { 0.0f, 0.0f, static_cast<f32>(p.s->targetSize.x), static_cast<f32>(p.s->targetSize.y) };
             ref.tex = { 0.0f, 0.0f, static_cast<f32>(p.s->targetSize.x) / static_cast<f32>(p.s->font->cellSize.x), static_cast<f32>(p.s->targetSize.y) / static_cast<f32>(p.s->font->cellSize.y) };
             ref.color = 0;
-            ref.shadingType = 1;
+            ref.shadingType = ShadingType::TextPassthrough;
         }
 
         // Text
         {
-            textRange.x = _vertexInstanceData.size();
-
             {
                 bool beganDrawing = false;
 
@@ -599,7 +532,7 @@ void BackendD3D11::Render(const RenderingPayload& p)
                                     static_cast<f32>(entry.wh.y),
                                 };
                                 ref.color = row.colors[i];
-                                ref.shadingType = entry.colorGlyph ? 1 : 0;
+                                ref.shadingType = entry.colorGlyph ? ShadingType::TextPassthrough : ShadingType::Text;
                             }
 
                             cumulativeAdvance += row.glyphAdvances[i];
@@ -615,28 +548,23 @@ void BackendD3D11::Render(const RenderingPayload& p)
                 }
             }
 
-            /*{
-                auto it = _metadata.begin();
-
-                for (u16 y = 0; y < p.s->cellCount.y; ++y)
+            {
+                size_t y = 0;
+                for (const auto& row : p.rows)
                 {
-                    for (u16 x = 0; x < p.s->cellCount.x; ++x, ++it)
+                    for (const auto& r : row.gridLineRanges)
                     {
-                        const auto meta = *it;
-                        const auto flags = meta.flags;
-                        if (flags == CellFlags::None)
-                        {
-                            continue;
-                        }
-                        
+                        assert(r.lines.any());
+
                         const auto top = p.s->font->cellSize.y * y;
-                        const auto left = p.s->font->cellSize.x * x;
+                        const auto left = p.s->font->cellSize.x * r.from;
+                        const auto width = p.s->font->cellSize.x * (r.to - r.from);
 
                         auto& ref = _vertexInstanceData.emplace_back();
-                        ref.color = meta.colors.x;
-                        ref.shadingType = 2;
+                        ref.color = r.color;
+                        ref.shadingType = ShadingType::SolidFill;
 
-                        if (WI_IsFlagSet(flags, CellFlags::BorderLeft))
+                        if (r.lines.test(GridLines::Left))
                         {
                             ref.rect = {
                                 static_cast<f32>(left),
@@ -645,7 +573,7 @@ void BackendD3D11::Render(const RenderingPayload& p)
                                 static_cast<f32>(p.s->font->cellSize.y),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::BorderTop))
+                        if (r.lines.test(GridLines::Top))
                         {
                             ref.rect = {
                                 static_cast<f32>(left),
@@ -654,7 +582,7 @@ void BackendD3D11::Render(const RenderingPayload& p)
                                 static_cast<f32>(p.s->font->thinLineWidth),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::BorderRight))
+                        if (r.lines.test(GridLines::Right))
                         {
                             ref.rect = {
                                 static_cast<f32>(left + p.s->font->cellSize.x - p.s->font->thinLineWidth),
@@ -663,7 +591,7 @@ void BackendD3D11::Render(const RenderingPayload& p)
                                 static_cast<f32>(p.s->font->cellSize.y),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::BorderBottom))
+                        if (r.lines.test(GridLines::Bottom))
                         {
                             ref.rect = {
                                 static_cast<f32>(left),
@@ -672,64 +600,64 @@ void BackendD3D11::Render(const RenderingPayload& p)
                                 static_cast<f32>(p.s->font->thinLineWidth),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::Underline))
+                        if (r.lines.test(GridLines::Underline))
                         {
                             ref.rect = {
                                 static_cast<f32>(left),
                                 static_cast<f32>(top + p.s->font->underlinePos),
-                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(width),
                                 static_cast<f32>(p.s->font->underlineWidth),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::UnderlineDotted))
+                        if (r.lines.test(GridLines::HyperlinkUnderline))
                         {
-                            // TODO
+                            ref.shadingType = ShadingType::DashedLine;
                             ref.rect = {
                                 static_cast<f32>(left),
                                 static_cast<f32>(top + p.s->font->underlinePos),
-                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(width),
                                 static_cast<f32>(p.s->font->underlineWidth),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::UnderlineDouble))
+                        if (r.lines.test(GridLines::DoubleUnderline))
                         {
                             ref.rect = {
                                 static_cast<f32>(left),
                                 static_cast<f32>(top + p.s->font->doubleUnderlinePos.x),
-                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(width),
                                 static_cast<f32>(p.s->font->thinLineWidth),
                             };
                             auto& ref2 = _vertexInstanceData.emplace_back();
-                            ref2.color = meta.colors.x;
-                            ref2.shadingType = 2;
+                            ref2.color = r.color;
+                            ref2.shadingType = ShadingType::SolidFill;
                             ref2.rect = {
                                 static_cast<f32>(left),
                                 static_cast<f32>(top + p.s->font->doubleUnderlinePos.y),
-                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(width),
                                 static_cast<f32>(p.s->font->thinLineWidth),
                             };
                         }
-                        if (WI_IsFlagSet(flags, CellFlags::Strikethrough))
+                        if (r.lines.test(GridLines::Strikethrough))
                         {
                             ref.rect = {
                                 static_cast<f32>(left),
                                 static_cast<f32>(top + p.s->font->strikethroughPos),
-                                static_cast<f32>(p.s->font->cellSize.x),
+                                static_cast<f32>(width),
                                 static_cast<f32>(p.s->font->strikethroughWidth),
                             };
                         }
                     }
-                }
-            }*/
 
-            textRange.y = _vertexInstanceData.size() - textRange.x;
+                    y++;
+                }
+            }
         }
 
         if (p.cursorRect.non_empty())
         {
-            cursorRange.x = _vertexInstanceData.size();
-
             auto& ref = _vertexInstanceData.emplace_back();
+            ref.color = 0xffffffff;
+            ref.shadingType = ShadingType::SolidFill;
             ref.rect = {
                 static_cast<f32>(p.s->font->cellSize.x * p.cursorRect.left),
                 static_cast<f32>(p.s->font->cellSize.y * p.cursorRect.top),
@@ -737,15 +665,13 @@ void BackendD3D11::Render(const RenderingPayload& p)
                 static_cast<f32>(p.s->font->cellSize.y * (p.cursorRect.bottom - p.cursorRect.top)),
             };
 
-            cursorRange.y = _vertexInstanceData.size() - cursorRange.x;
+            // TODO hole punching if 0x00000000
         }
 
         // Selection
-        /*{
-            selectionRange.x = _vertexInstanceData.size();
-
+        {
             size_t y = 0;
-            for (const auto& row : _rows)
+            for (const auto& row : p.rows)
             {
                 if (row.selectionTo > row.selectionFrom)
                 {
@@ -756,15 +682,13 @@ void BackendD3D11::Render(const RenderingPayload& p)
                         static_cast<f32>(p.s->font->cellSize.x * (row.selectionTo - row.selectionFrom)),
                         static_cast<f32>(p.s->font->cellSize.y),
                     };
-                    ref.color = _selectionColor;
-                    ref.shadingType = 2;
+                    ref.color = p.s->misc->selectionColor;
+                    ref.shadingType = ShadingType::SolidFill;
                 }
 
                 y++;
             }
-
-            selectionRange.y = _vertexInstanceData.size() - selectionRange.x;
-        }*/
+        }
     }
 
     if constexpr (true)
@@ -772,8 +696,8 @@ void BackendD3D11::Render(const RenderingPayload& p)
         ConstBuffer data;
         data.positionScale = { 2.0f / p.s->targetSize.x, -2.0f / p.s->targetSize.y, 1, 1 };
         DWrite_GetGammaRatios(_gamma, data.gammaRatios);
-        data.cleartypeEnhancedContrast = _cleartypeEnhancedContrast;
-        data.grayscaleEnhancedContrast = _grayscaleEnhancedContrast;
+        data.enhancedContrast = p.s->misc->antialiasingMode == D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE ? _cleartypeEnhancedContrast : _grayscaleEnhancedContrast;
+        data.dashedLineLength = p.s->font->underlineWidth * 3.0f;
 #pragma warning(suppress : 26447) // The function is declared 'noexcept' but calls function '...' which may throw exceptions (f.6).
         _deviceContext->UpdateSubresource(_constantBuffer.get(), 0, nullptr, &data, 0, 0);
     }
@@ -846,47 +770,17 @@ void BackendD3D11::Render(const RenderingPayload& p)
             _deviceContext->DrawInstanced(6, 1, 0, 0);
         }
 
-        // Inverted cursors use D3D11 Logic Ops with D3D11_LOGIC_OP_XOR (see GH#).
-        // But unfortunately this poses two problems:
-        // * Cursors are drawn "in between" text and selection
-        // * all RenderTargets bound must have a UINT format
-        // --> We have to draw in 3 passes.
-        if (cursorRange.y)
-        {
-            _deviceContext->PSSetShader(_textPixelShader.get(), nullptr, 0);
-            _deviceContext->PSSetShaderResources(0, 1, _atlasView.addressof());
-            _deviceContext->OMSetBlendState(_textBlendState.get(), nullptr, 0xffffffff);
-            _deviceContext->DrawInstanced(_instanceCount, gsl::narrow_cast<UINT>(textRange.y), 0, gsl::narrow_cast<UINT>(textRange.x));
-
-            _deviceContext->PSSetShader(_invertCursorPixelShader.get(), nullptr, 0);
-            _deviceContext->OMSetRenderTargets(1, _renderTargetViewUInt.addressof(), nullptr);
-            _deviceContext->OMSetBlendState(_invertCursorBlendState.get(), nullptr, 0xffffffff);
-            _deviceContext->DrawInstanced(_instanceCount, gsl::narrow_cast<UINT>(cursorRange.y), 0, gsl::narrow_cast<UINT>(cursorRange.x));
-
-            if (selectionRange.y)
-            {
-                _deviceContext->PSSetShader(_textPixelShader.get(), nullptr, 0);
-                _deviceContext->PSSetShaderResources(0, 1, _atlasView.addressof());
-                _deviceContext->OMSetRenderTargets(1, _renderTargetView.addressof(), nullptr);
-                _deviceContext->OMSetBlendState(_textBlendState.get(), nullptr, 0xffffffff);
-                _deviceContext->DrawInstanced(_instanceCount, gsl::narrow_cast<UINT>(selectionRange.y), 0, gsl::narrow_cast<UINT>(selectionRange.x));
-            }
-        }
-        else
-        {
-            _deviceContext->PSSetShader(_textPixelShader.get(), nullptr, 0);
-            _deviceContext->PSSetShaderResources(0, 1, _atlasView.addressof());
-            _deviceContext->OMSetBlendState(_textBlendState.get(), nullptr, 0xffffffff);
-            _deviceContext->DrawInstanced(_instanceCount, gsl::narrow_cast<UINT>(textRange.y + selectionRange.y), 0, gsl::narrow_cast<UINT>(textRange.x));
-        }
+        _deviceContext->PSSetShaderResources(0, 1, _atlasView.addressof());
+        _deviceContext->OMSetBlendState(_textBlendState.get(), nullptr, 0xffffffff);
+        _deviceContext->DrawInstanced(6, gsl::narrow<UINT>(_vertexInstanceData.size() - 1), 0, 1);
     }
 
-    if constexpr (false)
+    if constexpr (true)
     {
         _deviceContext->RSSetState(_wireframeRasterizerState.get());
         _deviceContext->PSSetShader(_wireframePixelShader.get(), nullptr, 0);
         _deviceContext->OMSetBlendState(_alphaBlendState.get(), nullptr, 0xffffffff);
-        _deviceContext->DrawInstanced(_instanceCount, gsl::narrow<UINT>(_vertexInstanceData.size()), 0, 0);
+        _deviceContext->DrawInstanced(6, gsl::narrow<UINT>(_vertexInstanceData.size()), 0, 0);
     }
 
     _swapChainManager.Present(p);

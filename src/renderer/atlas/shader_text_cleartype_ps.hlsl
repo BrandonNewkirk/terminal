@@ -8,8 +8,8 @@ cbuffer ConstBuffer : register(b0)
 {
     float4 positionScale;
     float4 gammaRatios;
-    float cleartypeEnhancedContrast;
-    float grayscaleEnhancedContrast;
+    float enhancedContrast;
+    float dashedLineLength;
 }
 
 Texture2D<float4> glyphAtlas : register(t0);
@@ -26,11 +26,10 @@ Output main(PSData data) : SV_Target
 {
     switch (data.shadingType)
     {
-    case 0:
+    case SHADING_TYPE_TEXT:
     {
         float4 glyph = glyphAtlas[data.texcoord];
-
-        float blendEnhancedContrast = DWrite_ApplyLightOnDarkContrastAdjustment(cleartypeEnhancedContrast, data.color.rgb);
+        float blendEnhancedContrast = DWrite_ApplyLightOnDarkContrastAdjustment(enhancedContrast, data.color.rgb);
         float3 contrasted = DWrite_EnhanceContrast3(glyph.rgb, blendEnhancedContrast);
         float3 alphaCorrected = DWrite_ApplyAlphaCorrection3(contrasted, data.color.rgb, gammaRatios);
         float4 weights = float4(alphaCorrected * data.color.a, 1);
@@ -61,20 +60,27 @@ Output main(PSData data) : SV_Target
         output.weights = weights;
         return output;
     }
-    case 1:
+    case SHADING_TYPE_TEXT_PASSTHROUGH:
     {
-        float4 glyph = glyphAtlas[data.texcoord];
-
         Output output;
-        output.color = glyph;
-        output.weights = glyph.aaaa;
+        output.color = glyphAtlas[data.texcoord];
+        output.weights = output.color.aaaa;
         return output;
     }
+    case SHADING_TYPE_DASHED_LINE:
+    {
+        bool on = frac(data.position.x / dashedLineLength) < 0.333333333f;
+        Output output;
+        output.color = on * premultiplyColor(data.color);
+        output.weights = output.color.aaaa;
+        return output;
+    }
+    case SHADING_TYPE_SOLID_FILL:
     default:
     {
         Output output;
         output.color = premultiplyColor(data.color);
-        output.weights = data.color.aaaa;
+        output.weights = output.color.aaaa;
         return output;
     }
     }

@@ -57,24 +57,39 @@ constexpr bool isInInversionList(const std::array<wchar_t, N>& ranges, wchar_t n
 [[nodiscard]] HRESULT AtlasEngine::Present() noexcept
 try
 {
-    if (!_b)
-    {
-        _recreateBackend();
-    }
-    
-    _b->Render(_p);
-
-    if (!_p.dxgiFactory->IsCurrent())
+    if (_p.dxgiFactory && !_p.dxgiFactory->IsCurrent())
     {
         _b.reset();
     }
 
+    if (!_b)
+    {
+        _recreateBackend();
+    }
+
+    _b->Render(_p);
     return S_OK;
 }
 catch (const wil::ResultException& exception)
 {
-    // TODO: this writes to _api.
-    return _handleException(exception);
+    const auto hr = exception.GetErrorCode();
+    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == D2DERR_RECREATE_TARGET)
+    {
+        _p.dxgiFactory.reset();
+        _b.reset();
+        return E_PENDING; // Indicate a retry to the renderer
+    }
+
+    if (_p.warningCallback)
+    {
+        try
+        {
+            _p.warningCallback(hr);
+        }
+        CATCH_LOG()
+    }
+
+    return hr;
 }
 CATCH_RETURN()
 

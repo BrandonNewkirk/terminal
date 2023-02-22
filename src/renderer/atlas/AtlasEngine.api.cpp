@@ -709,7 +709,7 @@ void AtlasEngine::_resolveFontMetrics(const wchar_t* requestedFaceName, const Fo
         fontMetrics->fontName = std::move(fontName);
         fontMetrics->baselineInDIP = baseline / dpi * 96.0f;
         fontMetrics->fontSizeInDIP = fontSizeInDIP;
-        fontMetrics->advanceScale = cellWidth / adjustedWidth;
+        fontMetrics->advanceScale = cellWidth / advanceWidth;
         fontMetrics->cellSize = { cellWidth, cellHeight };
         fontMetrics->fontWeight = fontWeightU16;
         fontMetrics->underlinePos = underlinePosU16;

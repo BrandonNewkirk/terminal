@@ -7,14 +7,10 @@
 
 #include <til/generational.h>
 
+#include "../../renderer/inc/IRenderEngine.hpp"
+
 namespace Microsoft::Console::Render::Atlas
 {
-    inline constexpr bool debugProportionalText = false;
-    inline constexpr bool debugForceD2DMode = true;
-    inline constexpr bool debugGlyphGenerationPerformance = false;
-    inline constexpr bool debugTextParsingPerformance = false;
-    inline constexpr bool debugContinuousRedraw = false;
-
 #define ATLAS_POD_OPS(type)                                           \
     constexpr auto operator<=>(const type&) const noexcept = default; \
                                                                       \
@@ -376,6 +372,14 @@ namespace Microsoft::Console::Render::Atlas
         u32 glyphsTo = 0;
     };
 
+    struct GridLineRange
+    {
+        GridLineSet lines;
+        u32 color = 0;
+        u16 from = 0;
+        u16 to = 0;
+    };
+
     struct ShapedRow
     {
         void clear() noexcept
@@ -385,6 +389,7 @@ namespace Microsoft::Console::Render::Atlas
             glyphAdvances.clear();
             glyphOffsets.clear();
             colors.clear();
+            gridLineRanges.clear();
             selectionFrom = 0;
             selectionTo = 0;
         }
@@ -394,7 +399,7 @@ namespace Microsoft::Console::Render::Atlas
         std::vector<f32> glyphAdvances; // same size as glyphIndices
         std::vector<DWRITE_GLYPH_OFFSET> glyphOffsets; // same size as glyphIndices
         std::vector<u32> colors;
-
+        std::vector<GridLineRange> gridLineRanges;
         u16 selectionFrom = 0;
         u16 selectionTo = 0;
     };

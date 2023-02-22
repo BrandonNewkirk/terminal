@@ -31,8 +31,8 @@ namespace Microsoft::Console::Render::Atlas
             //   because HLSL uses 32-bit bools and C++ doesn't.
             alignas(sizeof(f32x4)) f32x4 positionScale;
             alignas(sizeof(f32x4)) f32 gammaRatios[4]{};
-            alignas(sizeof(f32)) f32 cleartypeEnhancedContrast = 0;
-            alignas(sizeof(f32)) f32 grayscaleEnhancedContrast = 0;
+            alignas(sizeof(f32)) f32 enhancedContrast = 0;
+            alignas(sizeof(f32)) f32 dashedLineLength = 0;
 #pragma warning(suppress : 4324) // 'ConstBuffer': structure was padded due to alignment specifier
         };
 
@@ -168,19 +168,25 @@ namespace Microsoft::Console::Render::Atlas
             size_t _size = 0;
         };
 
+        enum class ShadingType : u32
+        {
+            Text = 0,
+            TextPassthrough = 1,
+            DashedLine = 2,
+            SolidFill = 3,
+        };
+
         struct alignas(16) VertexInstanceData
         {
             f32x4 rect;
             f32x4 tex;
             u32 color = 0;
-            u32 shadingType = 0;
+            ShadingType shadingType = ShadingType::Text;
 #pragma warning(suppress : 4324) // 'CustomConstBuffer': structure was padded due to alignment specifier
         };
 
         void _drawGlyph(const RenderingPayload& p, GlyphCacheEntry& entry, f32 fontEmSize);
 
-        static constexpr bool debugNvidiaQuadFill = false;
-        
         SwapChainManager _swapChainManager;
 
         wil::com_ptr<ID3D11Device1> _device;
@@ -237,10 +243,9 @@ namespace Microsoft::Console::Render::Atlas
         std::vector<stbrp_node> _rectPackerData;
         stbrp_context _rectPacker{};
         std::vector<VertexInstanceData> _vertexInstanceData;
-        u32 _instanceCount = 6;
 
         bool _requiresContinuousRedraw = false;
-        
+
         float _gamma = 0;
         float _cleartypeEnhancedContrast = 0;
         float _grayscaleEnhancedContrast = 0;

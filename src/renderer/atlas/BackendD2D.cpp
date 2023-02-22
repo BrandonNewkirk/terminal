@@ -110,48 +110,111 @@ void BackendD2D::Render(const RenderingPayload& p)
         // then blends it on the screen with the given bitmap brush. While this roughly doubles the performance
         // when drawing lots of colors, the extra latency drops performance by >10x when drawing fewer colors.
         // Since fewer colors are more common, I've chosen to go with regular solid-color brushes.
-        size_t y = 0;
-        for (const auto& row : p.rows)
         {
-            f32 x = 0.0f;
-            for (const auto& m : row.mappings)
+            u16 y = 0;
+            for (const auto& row : p.rows)
             {
-                const auto beg = row.colors.begin();
-                auto it = row.colors.begin() + m.glyphsFrom;
-                const auto end = row.colors.begin() + m.glyphsTo;
-
-                do
+                f32 x = 0.0f;
+                for (const auto& m : row.mappings)
                 {
-                    const auto beg2 = it;
-                    const auto off = it - beg;
-                    const auto fg = *it;
+                    const auto beg = row.colors.begin();
+                    auto it = row.colors.begin() + m.glyphsFrom;
+                    const auto end = row.colors.begin() + m.glyphsTo;
 
-                    while (++it != end && *it == fg)
+                    do
                     {
-                    }
+                        const auto beg2 = it;
+                        const auto off = it - beg;
+                        const auto fg = *it;
 
-                    const auto brush = _brushWithColor(fg);
-                    const DWRITE_GLYPH_RUN glyphRun{
-                        .fontFace = m.fontFace.get(),
-                        .fontEmSize = m.fontEmSize,
-                        .glyphCount = static_cast<UINT32>(it - beg2),
-                        .glyphIndices = &row.glyphIndices[off],
-                        .glyphAdvances = &row.glyphAdvances[off],
-                        .glyphOffsets = &row.glyphOffsets[off],
-                    };
-                    const D2D1_POINT_2F baseline{
-                        .x = x,
-                        .y = p.d.font.cellSizeDIP.y * y + p.s->font->baselineInDIP,
-                    };
-                    _drawGlyphRun(p.dwriteFactory4.get(), _d2dRenderTarget.get(), _d2dRenderTarget4.get(), baseline, &glyphRun, brush);
-                    for (UINT32 i = 0; i < glyphRun.glyphCount; ++i)
-                    {
-                        x += glyphRun.glyphAdvances[i];
-                    }
-                } while (it != end);
+                        while (++it != end && *it == fg)
+                        {
+                        }
+
+                        const auto brush = _brushWithColor(fg);
+                        const DWRITE_GLYPH_RUN glyphRun{
+                            .fontFace = m.fontFace.get(),
+                            .fontEmSize = m.fontEmSize,
+                            .glyphCount = static_cast<UINT32>(it - beg2),
+                            .glyphIndices = &row.glyphIndices[off],
+                            .glyphAdvances = &row.glyphAdvances[off],
+                            .glyphOffsets = &row.glyphOffsets[off],
+                        };
+                        const D2D1_POINT_2F baseline{
+                            .x = x,
+                            .y = p.d.font.cellSizeDIP.y * y + p.s->font->baselineInDIP,
+                        };
+                        _drawGlyphRun(p.dwriteFactory4.get(), _d2dRenderTarget.get(), _d2dRenderTarget4.get(), baseline, &glyphRun, brush);
+                        for (UINT32 i = 0; i < glyphRun.glyphCount; ++i)
+                        {
+                            x += glyphRun.glyphAdvances[i];
+                        }
+                    } while (it != end);
+                }
+
+                y++;
             }
+        }
 
-            y++;
+        {
+            u16 y = 0;
+            for (const auto& row : p.rows)
+            {
+                for (const auto& r : row.gridLineRanges)
+                {
+                    assert(r.lines.any());
+
+                    if (r.lines.test(GridLines::Left))
+                    {
+                    }
+                    if (r.lines.test(GridLines::Top))
+                    {
+                    }
+                    if (r.lines.test(GridLines::Right))
+                    {
+                    }
+                    if (r.lines.test(GridLines::Bottom))
+                    {
+                    }
+                    if (r.lines.test(GridLines::Underline))
+                    {
+                        _d2dCellFlagRendererUnderline(p, { r.from, y, r.to, y }, r.color);
+                    }
+                    if (r.lines.test(GridLines::HyperlinkUnderline))
+                    {
+                        _d2dCellFlagRendererUnderlineDotted(p, { r.from, y, r.to, y }, r.color);
+                    }
+                    if (r.lines.test(GridLines::DoubleUnderline))
+                    {
+                        _d2dCellFlagRendererUnderlineDouble(p, { r.from, y, r.to, y }, r.color);
+                    }
+                    if (r.lines.test(GridLines::Strikethrough))
+                    {
+                        _d2dCellFlagRendererStrikethrough(p, { r.from, y, r.to, y }, r.color);
+                    }
+                }
+
+                y++;
+            }
+        }
+
+        if (p.cursorRect.non_empty())
+        {
+            _d2dFillRectangle(p, p.cursorRect, p.s->misc->selectionColor);
+        }
+
+        {
+            u16 y = 0;
+            for (const auto& row : p.rows)
+            {
+                if (row.selectionTo > row.selectionFrom)
+                {
+                    u16r rect{ row.selectionFrom, y, row.selectionTo, gsl::narrow_cast<u16>(y + 1) };
+                    _d2dFillRectangle(p, rect, p.s->misc->selectionColor);
+                }
+
+                y++;
+            }
         }
     }
     THROW_IF_FAILED(_d2dRenderTarget->EndDraw());
@@ -204,7 +267,6 @@ void BackendD2D::_d2dFillRectangle(const RenderingPayload& p, u16r rect, u32 col
 
 void BackendD2D::_d2dCellFlagRendererCursor(const RenderingPayload& p, u16r rect, u32 color)
 {
-    //_drawCursor(p, _d2dRenderTarget.get(), rect, _brushWithColor(p.s->cursor->cursorColor), false);
 }
 
 void BackendD2D::_d2dCellFlagRendererSelected(const RenderingPayload& p, u16r rect, u32 color)

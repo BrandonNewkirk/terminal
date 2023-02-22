@@ -5,6 +5,12 @@
 
 namespace Microsoft::Console::Render::Atlas
 {
+    inline constexpr bool debugForceD2DMode = true;
+    inline constexpr bool debugProportionalText = false;
+    inline constexpr bool debugGlyphGenerationPerformance = false;
+    inline constexpr bool debugTextParsingPerformance = false;
+    inline constexpr bool debugContinuousRedraw = false;
+
     struct SwapChainManager
     {
         void UpdateSwapChainSettings(const RenderingPayload& p, IUnknown* device, auto&& prepareResize, auto&& prepareRecreate)
